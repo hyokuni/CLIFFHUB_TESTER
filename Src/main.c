@@ -99,6 +99,7 @@ int _write(int fd, char *str, int len);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void readCliffDistance(uint8_t reg_address);
+void readCliffCH(uint16_t delay_ms);
 /* USER CODE END 0 */
 
 /**
@@ -155,42 +156,11 @@ int main(void)
 
 //	HAL_I2C_Master_Transmit(&hi2c1, 0xA4, data, 3, 1000);
 
-	//read
-//	HAL_I2C_Master_Transmit(&hi2c1, 0xA7, &address, 1, 1000);
-//	HAL_Delay(50);
-//	HAL_I2C_Master_Receive(&hi2c1, 0xA7, data, 2, 1000);
-//	HAL_Delay(50);
-	readCliffDistance(CLIFF_I2C_REG_CH0);
-//	result = (uint16_t)(data[0]<<8) | data[1];
-	result = (uint16_t)(data[1]<<8) | data[0];
-	printf("CH0:%d ",result);
-	HAL_Delay(100);
 
-	readCliffDistance(CLIFF_I2C_REG_CH1);
-	result = (uint16_t)(data[0]<<8) | data[1];
-	printf("CH1:%d ",result);
-	HAL_Delay(100);
+	// read
+	readCliffCH(100);
 
-	readCliffDistance(CLIFF_I2C_REG_CH2);
-	result = (uint16_t)(data[0]<<8) | data[1];
-	printf("CH2:%d ",result);
-	HAL_Delay(100);
-
-	readCliffDistance(CLIFF_I2C_REG_CH3);
-	result = (uint16_t)(data[0]<<8) | data[1];
-	printf("CH3:%d ",result);
-	HAL_Delay(100);
-
-	readCliffDistance(CLIFF_I2C_REG_CH4);
-	HAL_Delay(100);
-	readCliffDistance(CLIFF_I2C_REG_CH5);
-	HAL_Delay(100);
-	readCliffDistance(CLIFF_I2C_REG_CH6);
-	HAL_Delay(100);
-	readCliffDistance(CLIFF_I2C_REG_CH7);
-	HAL_Delay(100);
-	printf("\n");
-	printf("end of while(1)\n");
+//	printf("end of while(1)\n");
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -448,16 +418,58 @@ int _write(int fd, char *str, int len)
 
 void readCliffDistance(uint8_t reg_address)
 {
-//	HAL_I2C_Master_Transmit(&hi2c1, 0xA6, &reg_address, 1, 1000);
-//	HAL_Delay(50);
-//	HAL_I2C_Master_Receive(&hi2c1, 0xA6, data, 2, 1000);
-//	HAL_Delay(50);
 
 	HAL_I2C_Master_Transmit(&hi2c1, 0xA6, &reg_address, 1, 1000);
 	HAL_Delay(5);
 	HAL_I2C_Master_Receive(&hi2c1, 0xA6, data, 2, 1000);
 	HAL_Delay(5);
 
+}
+
+void readCliffCH(uint16_t delay_ms)
+{
+
+	readCliffDistance(CLIFF_I2C_REG_CH0);
+	result = (uint16_t)(data[1]<<8) | data[0];		// LSB first
+	printf("CH0:%d ",result);
+	HAL_Delay(delay_ms);
+
+//	readCliffDistance(CLIFF_I2C_REG_CH1);
+//	result = (uint16_t)(data[1]<<8) | data[0];
+//	printf("CH1:%d ",result);
+//	HAL_Delay(delay_ms);
+
+//	readCliffDistance(CLIFF_I2C_REG_CH2);
+//	result = (uint16_t)(data[1]<<8) | data[0];
+//	printf("CH2:%d ",result);
+//	HAL_Delay(delay_ms);
+//
+//	readCliffDistance(CLIFF_I2C_REG_CH3);
+//	result = (uint16_t)(data[1]<<8) | data[0];
+//	printf("CH3:%d ",result);
+//	HAL_Delay(delay_ms);
+
+	readCliffDistance(CLIFF_I2C_REG_CH4);
+	result = (uint16_t)(data[1]<<8) | data[0];
+	printf("CH4:%d ",result);
+	HAL_Delay(delay_ms);
+
+//	readCliffDistance(CLIFF_I2C_REG_CH5);
+//	result = (uint16_t)(data[1]<<8) | data[0];
+//	printf("CH5:%d ",result);
+//	HAL_Delay(delay_ms);
+
+	readCliffDistance(CLIFF_I2C_REG_CH6);
+	result = (uint16_t)(data[1]<<8) | data[0];
+	printf("CH6:%d ",result);
+	HAL_Delay(delay_ms);
+
+//	readCliffDistance(CLIFF_I2C_REG_CH7);
+//	result = (uint16_t)(data[1]<<8) | data[0];
+//	printf("CH7:%d ",result);
+//	HAL_Delay(delay_ms);
+
+	printf("\n");
 }
 
 /* USER CODE END 4 */
