@@ -53,6 +53,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define CLIFF_SLAVE_ADDRESS				(0xA6)
+
 #define CLIFF_I2C_REG_CH0				(0x20)
 #define CLIFF_I2C_REG_CH1				(0x22)
 #define CLIFF_I2C_REG_CH2				(0x24)
@@ -62,6 +65,10 @@
 #define CLIFF_I2C_REG_CH6				(0x2c)
 #define CLIFF_I2C_REG_CH7				(0x2e)
 #define CLIFF_I2C_REG_CHD				(0x36)
+
+#define SEL_MODE_MAX					(4)
+
+#define BATINFO_SLAVE_ADDRESS			(0x00)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -79,10 +86,11 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint8_t address = 0x20;		// REG_RANGE address
-//uint8_t data[3];
+
 uint8_t data[3];
 uint16_t result;
 
+uint8_t gSelectMode;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -100,6 +108,8 @@ int _write(int fd, char *str, int len);
 /* USER CODE BEGIN 0 */
 void readCliffDistance(uint8_t reg_address);
 void readCliffCH(uint16_t delay_ms);
+void readBATINFO(uint16_t delay_ms);
+uint16_t readI2CHalfWord(uint8_t slave_address, uint8_t reg_address);
 /* USER CODE END 0 */
 
 /**
@@ -134,7 +144,6 @@ int main(void)
   MX_TIM1_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
-  HAL_Delay(1000);
   /* USER CODE BEGIN 2 */
 
   // read
@@ -149,18 +158,22 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  //write
-//	data[0] = 0x31;		// CLIFF_I2C_REG_PRESENT
-//	data[1] = 0x34;		// test
-//	data[2] = 0x32;
-
-//	HAL_I2C_Master_Transmit(&hi2c1, 0xA4, data, 3, 1000);
-
-	// read
-	readCliffCH(1000);
-
-//	printf("end of while(1)\n");
     /* USER CODE BEGIN 3 */
+
+	  switch(gSelectMode)
+	  {
+	  case 1:
+		  readCliffCH(100);
+		  break;
+	  case 2:
+		  break;
+	  case 3:
+		  readBATINFO(100);
+		  break;
+	  case 4:
+		  break;
+	  }
+
   }
   /* USER CODE END 3 */
 }
@@ -224,8 +237,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 400000;
-//  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.ClockSpeed = 40000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
@@ -393,7 +405,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
@@ -403,13 +415,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
 int _write(int fd, char *str, int len)
 {
 	for(int i=0;i<len;i++)
-	{ //UART 1번에 데이터 전송
+	{ //UART 1번에 ?��?��?�� ?��?��
 		HAL_UART_Transmit(&huart2, (uint8_t *)&str[i], 1, 0xFFFF);
 	}
 	return len;
@@ -424,14 +440,29 @@ void readCliffDistance(uint8_t reg_address)
 	HAL_Delay(5);
 
 }
+/*
+ *  @reg_address
+ * 	@return 		16bit data
+ */
+
+
+uint16_t readI2CHalfWord(uint8_t slave_address, uint8_t reg_address)
+{
+	uint8_t i2cdata[2];
+	HAL_I2C_Master_Transmit(&hi2c1, slave_address, &reg_address, 1, 1000);
+	HAL_Delay(5);
+	HAL_I2C_Master_Receive(&hi2c1, slave_address, i2cdata, 2, 1000);
+	HAL_Delay(5);
+	return (uint16_t)((i2cdata[1]<<8) | i2cdata[0]);
+}
 
 void readCliffCH(uint16_t delay_ms)
 {
 
 	readCliffDistance(CLIFF_I2C_REG_CH0);
-	result = (uint16_t)(data[1]<<8) | data[0];		// LSB first
 	printf("CH0:%d ",result);
-	HAL_Delay(delay_ms);
+	result = (uint16_t)(data[1]<<8) | data[0];		// LSB first
+//	HAL_Delay(delay_ms);
 
 //	readCliffDistance(CLIFF_I2C_REG_CH1);
 //	result = (uint16_t)(data[1]<<8) | data[0];
@@ -451,7 +482,7 @@ void readCliffCH(uint16_t delay_ms)
 	readCliffDistance(CLIFF_I2C_REG_CH4);
 	result = (uint16_t)(data[1]<<8) | data[0];
 	printf("CH4:%d ",result);
-	HAL_Delay(delay_ms);
+//	HAL_Delay(delay_ms);
 
 //	readCliffDistance(CLIFF_I2C_REG_CH5);
 //	result = (uint16_t)(data[1]<<8) | data[0];
@@ -461,14 +492,41 @@ void readCliffCH(uint16_t delay_ms)
 	readCliffDistance(CLIFF_I2C_REG_CH6);
 	result = (uint16_t)(data[1]<<8) | data[0];
 	printf("CH6:%d ",result);
-	HAL_Delay(delay_ms);
+//	HAL_Delay(delay_ms);
 
 //	readCliffDistance(CLIFF_I2C_REG_CH7);
 //	result = (uint16_t)(data[1]<<8) | data[0];
 //	printf("CH7:%d ",result);
 //	HAL_Delay(delay_ms);
-
+	HAL_Delay(delay_ms);
 	printf("\n");
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin==GPIO_PIN_13){
+//		printf("blue stick appear\n");
+		if(gSelectMode == SEL_MODE_MAX)
+			gSelectMode = 0;
+		// if click a blue user button, change the run application.
+		gSelectMode++;
+		printf("\n");
+		printf("gSelectMode:%d\n",gSelectMode);
+	}
+
+}
+
+void readBATINFO(uint16_t delay_ms)
+{
+	uint16_t tmpdata;
+	tmpdata = readI2CHalfWord(BATINFO_SLAVE_ADDRESS,0x00);
+	printf("readBATINFO:%d\n",tmpdata);
+
+	// test - confirm to function read i2c channel.
+//	tmpdata = readI2CHalfWord(CLIFF_SLAVE_ADDRESS,CLIFF_I2C_REG_CH0);
+//	printf("(T_func)CLIFF CH0:%d\n",tmpdata);
+//	HAL_Delay(delay_ms);
+
 }
 
 /* USER CODE END 4 */
