@@ -55,6 +55,8 @@
 /* USER CODE BEGIN PD */
 
 #define CLIFF_SLAVE_ADDRESS				(0xA6)
+#define BATINFO_SLAVE_ADDRESS			(0xEE)
+#define BATINFO_SLAVE_EXT_ADDRESS		(0x6C)
 
 #define CLIFF_I2C_REG_CH0				(0x20)
 #define CLIFF_I2C_REG_CH1				(0x22)
@@ -68,7 +70,6 @@
 
 #define SEL_MODE_MAX					(4)
 
-#define BATINFO_SLAVE_ADDRESS			(0x00)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -109,6 +110,8 @@ int _write(int fd, char *str, int len);
 void readCliffDistance(uint8_t reg_address);
 void readCliffCH(uint16_t delay_ms);
 void readBATINFO(uint16_t delay_ms);
+void touchINFO(uint16_t delay_ms);
+void touchbyCliffINFO(uint16_t delay_ms);
 uint16_t readI2CHalfWord(uint8_t slave_address, uint8_t reg_address);
 /* USER CODE END 0 */
 
@@ -148,9 +151,6 @@ int main(void)
 
   // read
 
-
-
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -163,14 +163,20 @@ int main(void)
 	  switch(gSelectMode)
 	  {
 	  case 1:
-		  readCliffCH(100);
+//		  readCliffCH(100);
+		  readBATINFO(100);
+//		  readBATINFO(1000);
 		  break;
 	  case 2:
 		  break;
 	  case 3:
-		  readBATINFO(100);
+//		  readBATINFO(100);
+//		  touchINFO(5);
+//		  readBATINFO(1000);
+		  touchbyCliffINFO(5);
 		  break;
 	  case 4:
+		  touchINFO(5);
 		  break;
 	  }
 
@@ -456,6 +462,16 @@ uint16_t readI2CHalfWord(uint8_t slave_address, uint8_t reg_address)
 	return (uint16_t)((i2cdata[1]<<8) | i2cdata[0]);
 }
 
+uint16_t readI2CHalfWord_MSBf(uint8_t slave_address, uint8_t reg_address)
+{
+	uint8_t i2cdata[2];
+	HAL_I2C_Master_Transmit(&hi2c1, slave_address, &reg_address, 1, 1000);
+	HAL_Delay(5);
+	HAL_I2C_Master_Receive(&hi2c1, slave_address, i2cdata, 2, 1000);
+	HAL_Delay(5);
+	return (uint16_t)(i2cdata[0]<<8 | i2cdata[1]);
+}
+
 void readCliffCH(uint16_t delay_ms)
 {
 
@@ -519,13 +535,80 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void readBATINFO(uint16_t delay_ms)
 {
 	uint16_t tmpdata;
-	tmpdata = readI2CHalfWord(BATINFO_SLAVE_ADDRESS,0x00);
-	printf("readBATINFO:%d\n",tmpdata);
+
+	printf("\n#1_BATINFO MCU\n");
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x00);
+	printf("read_VCELL\t[0x00]\t:%d\n",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x02);
+	printf("SOC\t[0x02]\t:%d\n",tmpdata>>8 & 0xFF);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x04);
+	printf("Current\t[0x04]\t:%d,",tmpdata & 0x7FFF);
+	// 15bit: charge/discharge 0:chg, 1:dis_chg
+	if(tmpdata >> 15 & 0x01)
+		printf("discharge\n");
+	else
+		printf("charge\n");
+
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x06);
+	printf("FullCap\t[0x06]\t:%d\n",tmpdata);
+	HAL_Delay(5);
+
+	printf("\n#2_CliffHub MCU\n");
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0A);
+	printf(" Cliff left\t[0x0A]\t:%d\n",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0C);
+	printf(" Cliff back\t[0x0C]\t:%d\n",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0E);
+	printf(" Cliff right\t[0x0E]\t:%d\n",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x10);
+	printf("Touch+state\t[0x10]\t:0x%x\n",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x10);
+	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
+	HAL_Delay(5);
+
 
 	// test - confirm to function read i2c channel.
 //	tmpdata = readI2CHalfWord(CLIFF_SLAVE_ADDRESS,CLIFF_I2C_REG_CH0);
 //	printf("(T_func)CLIFF CH0:%d\n",tmpdata);
 //	HAL_Delay(delay_ms);
+
+}
+
+
+void touchINFO(uint16_t delay_ms)
+{
+	uint16_t tmpdata;
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x10);
+//	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
+	printf("Tch:BATINFO:0x%x\n",tmpdata);
+	HAL_Delay(delay_ms);
+
+}
+
+void touchbyCliffINFO(uint16_t delay_ms)
+{
+	uint16_t tmpdata;
+
+	tmpdata = readI2CHalfWord_MSBf(CLIFF_SLAVE_ADDRESS,0x40);
+//	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
+	printf("Tch:Cliff:0x%x\n",tmpdata);
+	HAL_Delay(delay_ms);
 
 }
 
