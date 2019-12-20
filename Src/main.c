@@ -92,6 +92,11 @@ uint8_t data[3];
 uint16_t result;
 
 uint8_t gSelectMode;
+
+uint16_t f2f_runtime_pre;
+uint16_t f2f_runtime_now;
+uint16_t f2f_runtime_result;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -112,6 +117,8 @@ void readCliffCH(uint16_t delay_ms);
 void readBATINFO(uint16_t delay_ms);
 void touchINFO(uint16_t delay_ms);
 void touchbyCliffINFO(uint16_t delay_ms);
+void readBATINFOpCliff(uint16_t delay_ms);
+
 uint16_t readI2CHalfWord(uint8_t slave_address, uint8_t reg_address);
 /* USER CODE END 0 */
 
@@ -138,7 +145,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  HAL_Delay(500);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -148,6 +155,7 @@ int main(void)
   MX_I2C1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim1);
 
   // read
 
@@ -159,26 +167,34 @@ int main(void)
   {
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-
-	  switch(gSelectMode)
-	  {
-	  case 1:
-//		  readCliffCH(100);
-		  readBATINFO(100);
-//		  readBATINFO(1000);
-		  break;
-	  case 2:
-		  break;
-	  case 3:
-//		  readBATINFO(100);
-//		  touchINFO(5);
-//		  readBATINFO(1000);
-		  touchbyCliffINFO(5);
-		  break;
-	  case 4:
-		  touchINFO(5);
-		  break;
+	  // select user test program by blue button.
+	  if(1){
+		  switch(gSelectMode)
+		  {
+		  case 1:
+	//		  readCliffCH(100);
+			  readBATINFO(500);
+	//		  readBATINFO(1000);
+			  break;
+		  case 2:
+			  readBATINFOpCliff(500);
+			  break;
+		  case 3:
+	//		  readBATINFO(100);
+	//		  touchINFO(5);
+	//		  readBATINFO(1000);
+			  touchbyCliffINFO(5);
+			  break;
+		  case 4:
+			  touchINFO(5);
+			  break;
+		  }
 	  }
+	  // cliff 3ch read using BAT-INFO IC
+	  if(0){
+		  readBATINFOpCliff(500);
+	  }
+
 
   }
   /* USER CODE END 3 */
@@ -243,7 +259,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 40000;
+  hi2c1.Init.ClockSpeed = 400000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
@@ -278,12 +294,14 @@ static void MX_TIM1_Init(void)
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
-
+  // 84Mhz max
+  // 8400
+  // 1/10,000 = 100us
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 8400;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 0;
+  htim1.Init.Period = 9999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
@@ -581,6 +599,7 @@ void readBATINFO(uint16_t delay_ms)
 	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
 	HAL_Delay(5);
 
+	HAL_Delay(delay_ms);
 
 	// test - confirm to function read i2c channel.
 //	tmpdata = readI2CHalfWord(CLIFF_SLAVE_ADDRESS,CLIFF_I2C_REG_CH0);
@@ -589,26 +608,99 @@ void readBATINFO(uint16_t delay_ms)
 
 }
 
+void readBATINFOpCliff(uint16_t delay_ms)
+{
+	uint16_t tmpdata;
+
+//	printf("\n#2_CliffHub MCU\n");
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0A);
+	printf(" C\t%d\t",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0C);
+	printf("%d\t",tmpdata);
+	HAL_Delay(5);
+
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0E);
+	printf("%d\n",tmpdata);
+	HAL_Delay(5);
+
+	HAL_Delay(delay_ms);
+}
 
 void touchINFO(uint16_t delay_ms)
 {
+	static uint16_t predata;
 	uint16_t tmpdata;
 
 	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x10);
 //	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
 	printf("Tch:BATINFO:0x%x\n",tmpdata);
-	HAL_Delay(delay_ms);
+//	HAL_Delay(delay_ms);
+
+	// when value changed, time stamp
+	if(tmpdata!=0 && tmpdata != predata){
+
+		f2f_runtime_now = htim1.Instance->CNT;
+		if(f2f_runtime_now < f2f_runtime_pre){
+			f2f_runtime_result = (htim1.Instance->ARR + f2f_runtime_now) - f2f_runtime_pre;
+		}
+		else
+			f2f_runtime_result = f2f_runtime_now - f2f_runtime_pre;
+
+		// 1 = 100us
+		printf("t:%dms ",f2f_runtime_result/10);
+
+		printf("\n");
+
+	}
+
+	// function time scope
+	f2f_runtime_pre = htim1.Instance->CNT;
+
+	//old data save
+	predata = tmpdata;
 
 }
 
 void touchbyCliffINFO(uint16_t delay_ms)
 {
+	static uint16_t predata_c;
 	uint16_t tmpdata;
 
 	tmpdata = readI2CHalfWord_MSBf(CLIFF_SLAVE_ADDRESS,0x40);
 //	printf("Touch[0x10](8bit)\t:%d,  %d,  %d\n",tmpdata>>8 & 0x01,tmpdata>>9 & 0x01,tmpdata>>10 & 0x01 );
 	printf("Tch:Cliff:0x%x\n",tmpdata);
-	HAL_Delay(delay_ms);
+
+	// when value changed, time stamp
+	if(tmpdata!=0 && tmpdata != predata_c){
+
+		f2f_runtime_now = htim1.Instance->CNT;
+		if(f2f_runtime_now < f2f_runtime_pre){
+			f2f_runtime_result = (htim1.Instance->ARR + f2f_runtime_now) - f2f_runtime_pre;
+		}
+		else
+			f2f_runtime_result = f2f_runtime_now - f2f_runtime_pre;
+
+		// 1 = 100us
+		printf("t:%dms ",f2f_runtime_result/10);
+
+		printf("\n");
+
+	}
+
+	// function time scope
+	f2f_runtime_pre = htim1.Instance->CNT;
+
+	//old data save
+	predata_c = tmpdata;
+
+
+
+
+
+//	HAL_Delay(delay_ms);
 
 }
 
