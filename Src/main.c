@@ -68,7 +68,12 @@
 #define CLIFF_I2C_REG_CH7				(0x2e)
 #define CLIFF_I2C_REG_CHD				(0x36)
 
-#define SEL_MODE_MAX					(4)
+#define SEL_MODE_MAX					(2)
+
+#define BATINFO_I2C_REG_CLIFF_LEFT		(0x0A)
+#define BATINFO_I2C_REG_CLIFF_BACK		(0x0C)
+#define BATINFO_I2C_REG_CLIFF_RIGHT		(0x0E)
+
 
 /* USER CODE END PD */
 
@@ -92,6 +97,7 @@ uint8_t data[3];
 uint16_t result;
 
 uint8_t gSelectMode;
+uint8_t gSelectMode_pend;
 
 uint16_t f2f_runtime_pre;
 uint16_t f2f_runtime_now;
@@ -175,19 +181,20 @@ int main(void)
 	//		  readCliffCH(100);
 			  readBATINFO(500);
 	//		  readBATINFO(1000);
+			  gSelectMode_pend = RESET;
 			  break;
 		  case 2:
 			  readBATINFOpCliff(500);
+			  gSelectMode_pend = RESET;
 			  break;
-		  case 3:
-	//		  readBATINFO(100);
-	//		  touchINFO(5);
-	//		  readBATINFO(1000);
-			  touchbyCliffINFO(5);
-			  break;
-		  case 4:
-			  touchINFO(5);
-			  break;
+//		  case 3:
+//			  touchbyCliffINFO(5);
+//			  gSelectMode_pend = RESET;
+//			  break;
+//		  case 4:
+//			  touchINFO(5);
+//			  gSelectMode_pend = RESET;
+//			  break;
 		  }
 	  }
 	  // cliff 3ch read using BAT-INFO IC
@@ -538,7 +545,7 @@ void readCliffCH(uint16_t delay_ms)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-	if(GPIO_Pin==GPIO_PIN_13){
+	if(GPIO_Pin==GPIO_PIN_13 && gSelectMode_pend==RESET){
 //		printf("blue stick appear\n");
 		if(gSelectMode == SEL_MODE_MAX)
 			gSelectMode = 0;
@@ -546,6 +553,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		gSelectMode++;
 		printf("\n");
 		printf("gSelectMode:%d\n",gSelectMode);
+		gSelectMode_pend = SET;
 	}
 
 }
@@ -614,15 +622,15 @@ void readBATINFOpCliff(uint16_t delay_ms)
 
 //	printf("\n#2_CliffHub MCU\n");
 
-	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0A);
-	printf(" C\t%d\t",tmpdata);
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,BATINFO_I2C_REG_CLIFF_RIGHT);
+	printf("BatInfo Cliff {R,B,L}:\t%d\t",tmpdata);
 	HAL_Delay(5);
 
-	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0C);
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,BATINFO_I2C_REG_CLIFF_BACK);
 	printf("%d\t",tmpdata);
 	HAL_Delay(5);
 
-	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,0x0E);
+	tmpdata = readI2CHalfWord_MSBf(BATINFO_SLAVE_EXT_ADDRESS,BATINFO_I2C_REG_CLIFF_LEFT);
 	printf("%d\n",tmpdata);
 	HAL_Delay(5);
 
